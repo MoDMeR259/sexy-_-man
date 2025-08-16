@@ -1,0 +1,193 @@
+-- Steal a Brainrot Mini Hub
+-- Features: Auto-Steal + ESP + ClickTP + Safe Noclip + AntiVoid + AntiAFK
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
+
+local function char()
+    return LP.Character or LP.CharacterAdded:Wait()
+end
+
+local function hrp()
+    local c = char()
+    return c:FindFirstChild("HumanoidRootPart")
+end
+
+local function hum()
+    local c = char()
+    return c:FindFirstChildOfClass("Humanoid")
+end
+
+-- Anti-AFK
+pcall(function()
+    local vu = game:GetService("VirtualUser")
+    LP.Idled:Connect(function()
+        vu:CaptureController()
+        vu:ClickButton2(Vector2.new())
+    end)
+end)
+
+-- GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "SAB_MiniHub"
+gui.ResetOnSpawn = false
+gui.Parent = LP:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 260, 0, 420)
+frame.Position = UDim2.new(0.05, 0, 0.2, 0)
+frame.BackgroundColor3 = Color3.fromRGB(28,28,28)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+
+local corner = Instance.new("UICorner", frame); corner.CornerRadius = UDim.new(0,12)
+local list = Instance.new("UIListLayout", frame)
+list.Padding = UDim.new(0,6)
+list.FillDirection = Enum.FillDirection.Vertical
+list.HorizontalAlignment = Enum.HorizontalAlignment.Center
+list.VerticalAlignment = Enum.VerticalAlignment.Top
+list.SortOrder = Enum.SortOrder.LayoutOrder
+
+local function mkBtn(txt)
+    local b = Instance.new("TextButton")
+    b.Size = UDim2.new(1, -16, 0, 36)
+    b.BackgroundColor3 = Color3.fromRGB(48,48,48)
+    b.TextColor3 = Color3.fromRGB(255,255,255)
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 16
+    b.Text = txt
+    b.Parent = frame
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0,10)
+    return b
+end
+
+local statusLbl = Instance.new("TextLabel", frame)
+statusLbl.Size = UDim2.new(1, -16, 0, 24)
+statusLbl.BackgroundTransparency = 1
+statusLbl.TextColor3 = Color3.fromRGB(200,200,200)
+statusLbl.Font = Enum.Font.Gotham
+statusLbl.TextSize = 14
+statusLbl.Text = "Status: Idle"
+
+-- Flags
+local noclipEnabled = false
+local speedOn = false
+local autoSteal = false
+local espOn = false
+local clickTPArmed = false
+local speedValue = 50
+
+-- Noclip
+RunService.Stepped:Connect(function()
+    if noclipEnabled then
+        local c = char()
+        for _,p in ipairs(c:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
+end)
+
+-- Speed
+local function updateSpeed()
+    local h = hum()
+    if h then
+        h.WalkSpeed = speedOn and speedValue or 16
+    end
+end
+
+RunService.RenderStepped:Connect(updateSpeed)
+LP.CharacterAdded:Connect(function() task.wait(1); updateSpeed() end)
+
+-- Anti-Void
+RunService.Heartbeat:Connect(function()
+    local r = hrp()
+    if r and r.Position.Y < -50 then r.CFrame = CFrame.new(0,50,0) end
+end)
+
+-- Safe TP
+local function safeTP(targetCF)
+    local r = hrp(); if not r then return end
+    local tw = TweenService:Create(r, TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = targetCF})
+    tw:Play()
+    tw.Completed:Wait()
+end
+
+-- ESP
+local espFolder = Instance.new("Folder", gui); espFolder.Name = "ESP_Objects"
+local function clearESP() for _,h in ipairs(espFolder:GetChildren()) do h:Destroy() end end
+local function buildESP()
+    clearESP()
+    for _,m in ipairs(workspace:GetDescendants()) do
+        if m:IsA("Model") then
+            local h = Instance.new("Highlight")
+            h.Parent = espFolder
+            h.Adornee = m
+            h.FillTransparency = 0.75
+            h.OutlineTransparency = 0
+        end
+    end
+end
+
+-- Auto-Steal
+local function firePrompt(p) pcall(function() if fireproximityprompt then fireproximityprompt(p, 2) end end) end
+local function findStealTargets()
+    local targets = {}
+    for _,d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("ProximityPrompt") then table.insert(targets,{prompt=d, model=d:FindFirstAncestorOfClass("Model")}) end
+    end
+    return targets
+end
+
+-- Buttons
+local btnAutoSteal = mkBtn("🤖 Auto-Steal (OFF)")
+btnAutoSteal.MouseButton1Click:Connect(function() autoSteal = not autoSteal; btnAutoSteal.Text = autoSteal and "🤖 Auto-Steal (ON)" or "🤖 Auto-Steal (OFF)" end)
+
+local btnESP = mkBtn("👁️ ESP (OFF)")
+btnESP.MouseButton1Click:Connect(function() espOn = not espOn; btnESP.Text = espOn and "👁️ ESP (ON)" or "👁️ ESP (OFF)"; if espOn then task.spawn(function() while espOn do buildESP() task.wait(3) end end) else clearESP() end end)
+
+local btnTP = mkBtn("🌀 Click-TP (press T to arm)")
+btnTP.MouseButton1Click:Connect(function() clickTPArmed = not clickTPArmed; btnTP.Text = clickTPArmed and "🌀 Click-TP (ARMED)" or "🌀 Click-TP (press T to arm)" end)
+UserInputService.InputBegan:Connect(function(i,gp)
+    if gp then return end
+    if i.KeyCode == Enum.KeyCode.T and clickTPArmed then
+        local conn
+        conn = Mouse.Button1Down:Connect(function()
+            if Mouse.Hit and hrp() then safeTP(Mouse.Hit + Vector3.new(0,3,0)) end
+            if conn then conn:Disconnect() end
+        end)
+    end
+end)
+
+local btnNoClip = mkBtn("🚪 Toggle Noclip (OFF)")
+btnNoClip.MouseButton1Click:Connect(function() noclipEnabled = not noclipEnabled; btnNoClip.Text = noclipEnabled and "🚪 Toggle Noclip (ON)" or "🚪 Toggle Noclip (OFF)" end)
+
+local btnSpeed = mkBtn("⚡ Speed x3 (OFF)")
+btnSpeed.MouseButton1Click:Connect(function() speedOn = not speedOn; btnSpeed.Text = speedOn and "⚡ Speed x3 (ON)" or "⚡ Speed x3 (OFF)" end)
+
+-- Exit Script
+local btnExit = mkBtn("❌ Exit Script")
+btnExit.MouseButton1Click:Connect(function()
+    noclipEnabled = false
+    speedOn = false
+    autoSteal = false
+    espOn = false
+    clickTPArmed = false
+    clearESP()
+    gui:Destroy()
+end)
+
+local tip = Instance.new("TextLabel", frame)
+tip.Size = UDim2.new(1, -16, 0, 44)
+tip.BackgroundTransparency = 1
+tip.TextColor3 = Color3.fromRGB(180,180,180)
+tip.Font = Enum.Font.Gotham
+tip.TextWrapped = true
+tip.TextSize = 13
+tip.Text = "ESP then Auto-Steal. Use Click-TP with T to teleport."
+statusLbl.LayoutOrder = -1
